@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Display a popup on click</title>
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js"></script>
+    <link
+      href="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+          margin: 0;
+          padding: 0;
+          font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+      }
+      #map {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 100%;
+      }
+
+      .p1{
+          font-size:8px;
+      }
+      .p2{
+          font-size:10px;
+          color:blue;
+      }
+      .p3{
+          font-size:12px;
+          color:purple;
+      }
+      .p4{
+          font-size:16px;
+          color:rgb(197, 92, 188);
+      }
+      .p5{
+          font-size:16px;
+          color:orange;
+      }
+      .p6{
+          font-size:16px;
+          color:red;
+      }
+      /*
+      https://docs.mapbox.com/help/tutorials/custom-markers-gl-js/
+      */
+      .marker {
+        background-image: url('./img/shamrock.png');
+        background-size: cover;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <script>
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoicGV0ZXJtY2tqIiwiYSI6ImNrdXIxazRtajA5YXUyd3A1ZGVkdWRqcm4ifQ.4cqE3n7zDFniqDW79EuwYQ";
+      //styles reference: https://docs.mapbox.com/api/maps/styles/
+      const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/outdoors-v12", //"mapbox://styles/mapbox/streets-v11",
+        center: [-7.503, 53.449],
+        zoom: 6,
+      });
+
+      let currentMarkers = [];
+
+      const getLatLng = (latlng) => {
+        let elements = latlng.split(",");
+        return { lat: elements[0], lng: elements[1] };
+      };
+
+      const makeUri = (postcode) => {
+        //return `https://data.police.uk/api/crimes-street/violent-crime?lat=${lat}&lng=${lng}`;
+        return `https://www.givefood.org.uk/api/2/locations/search/?address=${postcode}`;
+      };
+
+      const makeUriFromLatLng = (lat, lng) => {
+        //return `https://data.police.uk/api/crimes-street/violent-crime?lat=${lat}&lng=${lng}`;
+        return `https://www.givefood.org.uk/api/2/locations/search/?lat_lng=${lat},${lng}`;
+      };
+
+      const clearMarkers = () => {
+        if (currentMarkers !== null) {
+          for (var i = currentMarkers.length - 1; i >= 0; i--) {
+            currentMarkers[i].remove();
+          }
+        }
+      };
+
+      map.on("load", () => {
+        /*map.on('click', (e)=>{
+                 console.log(`{'lat':${e.lngLat.lat},'lng':${e.lngLat.lng}}`);
+            });*/
+
+      fetch('https://failteireland.azure-api.net/opendata-api/v2/attractions', {
+              method: 'GET',
+              // Request headers
+              headers: {
+                  'Cache-Control': 'no-cache',}
+          })
+          .then((response) => response.json())
+          .then((json)=>{
+            console.log(json.value[0]);
+            const next = json["@odata.nextLink"]; //gets the next set of 100
+            json.value.forEach((loc)=>{
+              const popup = new mapboxgl.Popup({ offset: 25 });
+              //const el = document.createElement('div');
+              //el.className = 'marker';
+              popup.setHTML(
+                `<h1>${loc.name}</h1><p>${loc.description.substring(0,loc.description.indexOf('.'))}.</p>`
+              );
+              const marker = new mapboxgl.Marker({
+                color: "#00FF00",
+                draggable: false,
+              })
+                .setLngLat([loc.geo.longitude, loc.geo.latitude])
+                .setPopup(popup)
+                .addTo(map);
+              currentMarkers.push(marker);
+            })
+          })
+          .catch(err => console.error(err));
+
+        // Get and display user's location
+if ('geolocation' in navigator) {
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const userLocation = [position.coords.longitude, position.coords.latitude];
+      const userPopup = new mapboxgl.Popup({ offset: 25 }).setText('You are here');
+      const userMarker = new mapboxgl.Marker({
+        color: 'red',
+        draggable: false,
+      })
+        .setLngLat(userLocation)
+        .setPopup(userPopup)
+        .addTo(map);
+      map.setCenter(userLocation);
+      map.setZoom(10);
+    },
+    (error) => {
+      console.error('Error getting user location:', error);
+    }
+  );
+} else {
+  console.error('Geolocation is not supported by this browser.');
+}
+
+        /*
+        fetch("./locations.json")
+          .then((response) => response.json())
+          .then((json) => {
+            json.forEach((loc) => {
+              const popup = new mapboxgl.Popup({ offset: 25 });
+              const el = document.createElement('div');
+              el.className = 'marker';
+              popup.setHTML(
+                '<div><h1>Hi!</h1><iframe width="230" height="129" src="https://www.youtube.com/embed/dXPLknP1CW4?si=1B-D1h_H6jDIoUul" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>'
+              );
+              const marker = new mapboxgl.Marker(el,{
+                color: "#00FF00",
+                draggable: false,
+              })
+                .setLngLat([loc.lng, loc.lat])
+                .setPopup(popup)
+                .addTo(map);
+              currentMarkers.push(marker);
+            });
+          });*/
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Display a popup on click</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+    .marker {
+      background-image: url('./img/shamrock.png');
+      background-size: cover;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .arrow {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-bottom: 40px solid red;
+      transform-origin: bottom center;
+    }
+    #distance {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 5px;
+      background: white;
+      border: 1px solid black;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+  <!-- Added distance display -->
+  <div id="distance">Distance: </div>
+  <!-- Added arrow element -->
+  <div id="arrow" class="arrow"></div>
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoicGV0ZXJtY2tqIiwiYSI6ImNrdXIxazRtajA5YXUyd3A1ZGVkdWRqcm4ifQ.4cqE3n7zDFniqDW79EuwYQ';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center: [-7.503, 53.449],
+      zoom: 6,
+    });
+
+    let currentMarkers = [];
+    let userLocation = null;
+
+    // Added Haversine formula function for distance calculation
+    const haversineDistance = (coords1, coords2) => {
+      const toRad = (value) => value * Math.PI / 180;
+      const R = 6371; // Radius of Earth in kilometers
+      const dLat = toRad(coords2[1] - coords1[1]);
+      const dLon = toRad(coords2[0] - coords1[0]);
+      const lat1 = toRad(coords1[1]);
+      const lat2 = toRad(coords2[1]);
+
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    // Added function to update arrow and distance display
+    const updateArrowAndDistance = (attractionCoords) => {
+      const distance = haversineDistance(userLocation, attractionCoords).toFixed(2);
+      document.getElementById('distance').innerText = `Distance: ${distance} km`;
+
+      const angle = Math.atan2(attractionCoords[1] - userLocation[1], attractionCoords[0] - userLocation[0]) * 180 / Math.PI;
+      const arrow = document.getElementById('arrow');
+      arrow.style.transform = `rotate(${angle}deg) translate(-50%, -50%)`;
+      arrow.style.left = `calc(50% + ${userLocation[0]}px)`;
+      arrow.style.top = `calc(50% + ${userLocation[1]}px)`;
+    };
+
+    const clearMarkers = () => {
+      if (currentMarkers !== null) {
+        for (var i = currentMarkers.length - 1; i >= 0; i--) {
+          currentMarkers[i].remove();
+        }
+      }
+    };
+
+    map.on('load', () => {
+      // Fetch and display attraction markers
+      fetch('https://failteireland.azure-api.net/opendata-api/v2/attractions', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+        .then((response) => response.json())
+        .then((json) => {
+          json.value.forEach((loc) => {
+            const popup = new mapboxgl.Popup({ offset: 25 });
+            popup.setHTML(
+              `<h1>${loc.name}</h1><p>${loc.description.substring(0, loc.description.indexOf('.'))}.</p>`
+            );
+            const marker = new mapboxgl.Marker({
+              color: '#00FF00',
+              draggable: false,
+            })
+              .setLngLat([loc.geo.longitude, loc.geo.latitude])
+              .setPopup(popup)
+              .addTo(map);
+            currentMarkers.push(marker);
+
+            // Added event listener for updating arrow and distance on marker click
+            marker.getElement().addEventListener('click', () => {
+              updateArrowAndDistance([loc.geo.longitude, loc.geo.latitude]);
+            });
+          });
+        })
+        .catch((err) => console.error(err));
+
+      // Get and display user's location
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            userLocation = [position.coords.longitude, position.coords.latitude];
+            const userPopup = new mapboxgl.Popup({ offset: 25 }).setText('You are here');
+            const userMarker = new mapboxgl.Marker({
+              color: 'red',
+              draggable: false,
+            })
+              .setLngLat(userLocation)
+              .setPopup(userPopup)
+              .addTo(map);
+            map.setCenter(userLocation);
+            map.setZoom(10);
+          },
+          (error) => {
+            console.error('Error getting user location:', error);
+          }
+        );
+      } else {
+        console.error('Geolocation is not supported by this browser.');
+      }
+    });
+  </script>
+</body>
+</html>
